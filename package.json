@@ -2,7 +2,9 @@
   "name": "gestion-de-caisse-frontend",
   "private": true,
   "version": "0.0.1",
+  "homepage": "https://thamas06.github.io/frontendbordoss",
   "type": "module",
+
   "scripts": {
     "dev": "vite",
     "build": "vite build",
