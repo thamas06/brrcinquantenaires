@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* Palette dark - The Digital Sommelier */
+  --color-primary: #bac8dc;
+  --color-primary-fixed-dim: #bac8dc;
+  --color-on-primary: #243141;
+  --color-on-primary-container: #768497;
+  --color-primary-container: #0d1b2a;
+  --color-secondary: #e9c176;
+  --color-secondary-fixed-dim: #dab36a;
+  --color-on-secondary: #412d00;
+  --color-secondary-container: #604403;
+  --color-on-secondary-container: #dab36a;
+  --color-tertiary: #95d4b3;
+  --color-on-tertiary: #003824;
+  --color-tertiary-container: #001f12;
+  --color-on-tertiary-container: #528f71;
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+  --color-surface: #071327;
+  --color-surface-dim: #071327;
+  --color-surface-bright: #2e394f;
+  --color-surface-tint: #bac8dc;
+  --color-surface-variant: #2a354b;
+  --color-on-surface: #d7e2ff;
+  --color-on-surface-variant: #c4c6cc;
+  --color-on-background: #d7e2ff;
+  --color-background: #071327;
+  --color-surface-container-lowest: #030e22;
+  --color-surface-container-low: #101b30;
+  --color-surface-container: #142034;
+  --color-surface-container-high: #1f2a3f;
+  --color-surface-container-highest: #2a354b;
+  --color-outline: #8e9196;
+  --color-outline-variant: #44474c;
+  --color-inverse-surface: #d7e2ff;
+  --color-inverse-on-surface: #263046;
+  --color-inverse-primary: #525f71;
+
+  /* Définition des polices pour générer les utilitaires font-* */
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Manrope", sans-serif;
+
+  /* Définition des effets pour générer shadow-* et backdrop-blur-* */
+  --shadow-floating: 0 8px 30px rgba(0, 0, 0, 0.1);
+  --blur-glass: 12px;
+}
+
+/* Base styles */
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: #071327;
+    color: #d7e2ff;
+    min-height: 100dvh;
+  }
+
+  /* Material Icons */
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    font-size: 24px;
+  }
+}
+
+/* Composants personnalisés */
+@layer components {
+  /* Boutons */
+  .btn-primary {
+    @apply px-6 py-2.5 bg-gradient-to-br from-secondary to-secondary-fixed-dim text-on-secondary font-headline font-bold rounded-3xl transition-all duration-300 shadow-lg shadow-secondary/20 hover:opacity-90 active:opacity-80;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-2.5 bg-surface-container-high text-primary font-headline font-bold rounded-xl transition-colors hover:bg-surface-container-highest;
+  }
+
+  .btn-ghost {
+    @apply text-primary font-headline font-semibold hover:underline;
+  }
+
+  /* Cartes et Panneaux */
+  .card {
+    @apply bg-surface-container-low rounded-2xl p-6 transition-all duration-300;
+  }
+
+  .card-elevated {
+    @apply bg-surface-container-high rounded-2xl p-4 shadow-floating;
+  }
+
+  /* Panneau verre (glassmorphism) */
+  .glass-panel {
+    @apply bg-surface-container-highest/80 backdrop-blur-glass border border-outline-variant/15;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full px-4 py-3 bg-surface-container-lowest rounded-md border-none outline-none transition-all duration-200 text-on-background placeholder:text-on-surface-variant/60;
+  }
+
+  .input-field:focus {
+    @apply ring-2 ring-primary/30;
+  }
+
+  /* Navigation Drawer */
+  .nav-drawer {
+    @apply fixed left-0 top-0 h-screen w-72 bg-surface-container/80 backdrop-blur-xl rounded-r-3xl shadow-floating flex flex-col p-4 z-50 hidden md:flex;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl font-headline font-bold transition-all duration-300;
+  }
+
+  .nav-item-active {
+    @apply bg-surface-tint/10 text-secondary border-l-4 border-secondary scale-[0.98];
+  }
+
+  .nav-item-inactive {
+    @apply text-primary/80 hover:bg-surface-tint/5;
+  }
+
+  /* Badges et indicateurs */
+  .badge {
+    @apply px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider;
+  }
+
+  .badge-positive {
+    @apply bg-tertiary/10 text-tertiary;
+  }
+
+  .badge-negative {
+    @apply bg-error/10 text-error;
+  }
+
+  /* Métriques Bento Grid */
+  .metric-card {
+    @apply bg-surface-container-low rounded-2xl p-6 relative overflow-hidden hover:bg-surface-container-high transition-colors duration-300;
+  }
+
+  /* Timeline / Activity Feed */
+  .activity-item {
+    @apply flex gap-4 relative pb-8;
+  }
+
+  .activity-item::after {
+    @apply content-[''] absolute left-[11px] top-8 bottom-0 w-[2px] bg-surface-container-highest;
+  }
+
+  .activity-item:last-child::after {
+    @apply hidden;
+  }
+}
+
+/* Utilitaires personnalisés */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-secondary to-secondary-fixed-dim;
+  }
+
+  .glow-effect {
+    box-shadow: 0 0 20px rgba(233, 193, 118, 0.15);
+  }
+
+  .tracking-tighter {
+    letter-spacing: -0.02em;
+  }
+
+  .tracking-widest {
+    letter-spacing: 0.05em;
+  }
+}
