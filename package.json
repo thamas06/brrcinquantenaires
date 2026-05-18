@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist --dotfiles",
-    "preview": "vite preview"
+    "deploy": "npm run build && wrangler deploy",
+    "preview": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
@@ -19,11 +19,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.5.0",
     "gh-pages": "^6.3.0",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.2",
-    "vite": "^6.4.2"
+    "vite": "^6.4.2",
+    "wrangler": "^4.92.0"
   }
 }
