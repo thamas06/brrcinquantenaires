@@ -15,13 +15,17 @@ export async function authFetch(path, opts = {}){
   const token = getToken()
   const headers = Object.assign({}, opts.headers || {})
   if(token) headers['Authorization'] = 'Bearer ' + token
-  return fetch(API_BASE + path, Object.assign({}, opts, { headers }))
+  return fetch(API_BASE + path, Object.assign({}, opts, { 
+    headers,
+    credentials: 'include'
+  }))
 }
 
 export async function login(email, password){
   const res = await fetch(API_BASE + '/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email, password })
   })
   const data = await res.json().catch(() => null)
@@ -35,6 +39,7 @@ export async function login(email, password){
 export async function register(name, email, password, password_confirmation){
   const res = await fetch(API_BASE + '/api/register', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password, password_confirmation })
   })
