@@ -110,9 +110,9 @@ export async function getSales(){
 
 function normalizeSale(s){
   const product_id = s.product_id ?? s.productId ?? null
-  const qty = s.qty ?? s.quantity ?? 0
-  const total_sale = s.total_sale ?? s.totalSale ?? ((s.unit_price ?? s.unitPrice ?? 0) * qty)
-  const total_profit = s.total_profit ?? s.totalProfit ?? 0
+  const qty = Number(s.qty ?? s.quantity ?? 0)
+  const total_sale = Number(s.total_sale ?? s.totalSale ?? ((s.unit_price ?? s.unitPrice ?? 0) * qty))
+  const total_profit = Number(s.total_profit ?? s.totalProfit ?? 0)
   const employee_id = s.employee_id ?? s.employeeId ?? s.employee ?? null
   return Object.assign({}, s, {
     product_id,

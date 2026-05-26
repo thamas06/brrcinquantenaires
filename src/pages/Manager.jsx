@@ -182,8 +182,8 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
             {employees.map(emp => {
               const prods = products.filter(p => p.declared_for_user_id === emp.id || p.employeeId === emp.id)
               const empSales = sales.filter(s => String(s.employee_id) === String(emp.id) || String(s.employeeId) === String(emp.id))
-              const empTotalQty = empSales.reduce((a, s) => a + (s.qty || s.quantity || 0), 0)
-              const empTotalAmount = empSales.reduce((a, s) => a + (s.total_sale || s.totalSale || 0), 0)
+              const empTotalQty = empSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+              const empTotalAmount = empSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
               return (
                 <div key={emp.id} className="p-4 bg-surface-container-high rounded-xl">
                   <div className="flex justify-between items-start mb-3">
@@ -215,8 +215,8 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
           <div className="space-y-3">
             {products.map(p => {
               const pSales = sales.filter(s => String(s.product_id) === String(p.id) || String(s.productId) === String(p.id))
-              const qty = pSales.reduce((a, s) => a + (s.qty || s.quantity || 0), 0)
-              const amt = pSales.reduce((a, s) => a + (s.total_sale || s.totalSale || 0), 0)
+              const qty = pSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+              const amt = pSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
               return (
                 <div key={p.id} className="p-4 bg-surface-container-high rounded-xl">
                   <div className="flex justify-between items-center">

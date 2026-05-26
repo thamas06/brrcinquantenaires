@@ -51,8 +51,8 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
     exportProductSalesToExcel(`${empId}_report_local.xlsx`, rows)
   }
 
-  const totalSales = sales.reduce((a, s) => a + (s.total_sale || s.totalSale || 0), 0)
-  const totalQty = sales.reduce((a, s) => a + (s.qty || s.quantity || 0), 0)
+  const totalSales = sales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
+  const totalQty = sales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
 
   return (
     <div className="space-y-8">
@@ -142,9 +142,9 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
           {employees.map(emp => {
             const prods = products.filter(p => p.declared_for_user_id === emp.id || p.employeeId === emp.id)
             const empSales = sales.filter(s => String(s.employee_id) === String(emp.id) || String(s.employeeId) === String(emp.id))
-            const empTotalQty = empSales.reduce((a, s) => a + (s.qty || s.quantity || 0), 0)
-            const empTotalAmount = empSales.reduce((a, s) => a + (s.total_sale || s.totalSale || 0), 0)
-            const empProfit = empSales.reduce((a, s) => a + (s.total_profit || s.totalProfit || 0), 0)
+            const empTotalQty = empSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+            const empTotalAmount = empSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
+            const empProfit = empSales.reduce((a, s) => a + Number(s.total_profit || s.totalProfit || 0), 0)
             return (
               <div key={emp.id} className="p-4 bg-surface-container-high rounded-xl">
                 <div className="flex justify-between items-start mb-3">
@@ -196,7 +196,7 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
                       <p className="text-xs text-on-primary-container">Qté: {s.qty || s.quantity} • {s.employeeName || 'N/A'}</p>
                     </div>
                   </div>
-                  <p className="text-secondary font-bold">{(s.total_sale || s.totalSale || 0).toFixed(0)} FCFA</p>
+                  <p className="text-secondary font-bold">{Number(s.total_sale || s.totalSale || 0).toFixed(0)} FCFA</p>
                 </div>
               )
             })}
@@ -210,8 +210,8 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map(p => {
             const pSales = sales.filter(s => s.product_id === p.id || s.productId === p.id)
-            const qty = pSales.reduce((a, s) => a + (s.qty || s.quantity || 0), 0)
-            const amt = pSales.reduce((a, s) => a + (s.total_sale || s.totalSale || 0), 0)
+            const qty = pSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+            const amt = pSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
             return (
               <div key={p.id} className="p-4 bg-surface-container-high rounded-xl">
                 <div className="flex justify-between items-center">
