@@ -119,6 +119,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
             <SaleForm
               product={selected}
               employees={employees}
+              currentUser={currentUser}
               onSold={() => {
                 setSelected(null)
                 refresh()

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import Swal from 'sweetalert2'
 import { saveSale } from '../utils/storage'
 
-export default function SaleForm({ product, employees, onSold, role }){
+export default function SaleForm({ product, employees, onSold, role, currentUser }){
   const [employeeId, setEmployeeId] = useState('')
   const [qty, setQty] = useState(1)
   const [availableStock, setAvailableStock] = useState(null)
@@ -11,14 +11,16 @@ export default function SaleForm({ product, employees, onSold, role }){
   const unitProfit = Number(product.sale_price || product.salePrice) - Number(product.cost_price || product.costPrice || 0)
   const total = unitPrice * Number(qty)
 
+  const isCaissier = role === 'caissier' || role === 'employee'
+
   useEffect(() => {
-    // Initialiser l'employé
-    if (employees.length > 0 && !employeeId) {
+    if (isCaissier && currentUser) {
+      setEmployeeId(currentUser.id)
+    } else if (employees.length > 0 && !employeeId) {
       setEmployeeId(employees[0].id)
     }
-    // Mettre à jour le stock disponible
     setAvailableStock(product.stock ?? product.stock === 0 ? product.stock : null)
-  }, [product, employees])
+  }, [product, employees, currentUser])
 
   async function handleSubmit(e){
     e.preventDefault()
@@ -66,21 +68,23 @@ export default function SaleForm({ product, employees, onSold, role }){
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Employé */}
-        <div>
-          <label className="block text-sm font-semibold text-on-surface-variant mb-2">
-            Vendu par
-          </label>
-          <select
-            value={employeeId}
-            onChange={e=>setEmployeeId(e.target.value)}
-            className="input-field"
-          >
-            {employees.map(emp=> (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* Employé - caché pour caissier */}
+        {!isCaissier && (
+          <div>
+            <label className="block text-sm font-semibold text-on-surface-variant mb-2">
+              Vendu par
+            </label>
+            <select
+              value={employeeId}
+              onChange={e=>setEmployeeId(e.target.value)}
+              className="input-field"
+            >
+              {employees.map(emp=> (
+                <option key={emp.id} value={emp.id}>{emp.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Quantité */}
         <div>
