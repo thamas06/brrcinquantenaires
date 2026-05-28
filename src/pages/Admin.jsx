@@ -196,7 +196,7 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {sales.slice().reverse().slice(0, 10).map(s => {
-              const prod = products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))
+              const name = s.productName || products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))?.name || 'Produit inconnu'
               return (
                 <div key={s.id} className="flex justify-between items-center p-4 bg-surface-container-high rounded-xl">
                   <div className="flex items-center gap-4">
@@ -204,7 +204,7 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
                       <span className="material-symbols-outlined text-sm">inventory_2</span>
                     </div>
                     <div>
-                      <p className="font-headline font-semibold text-on-background">{prod?.name || 'Produit inconnu'}</p>
+                      <p className="font-headline font-semibold text-on-background">{name}</p>
                       <p className="text-xs text-on-primary-container">Qté: {s.qty || s.quantity} • {s.employeeName || 'N/A'}</p>
                     </div>
                   </div>

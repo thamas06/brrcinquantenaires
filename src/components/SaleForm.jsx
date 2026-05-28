@@ -2,67 +2,84 @@ import React, { useState, useEffect } from 'react'
 import Swal from 'sweetalert2'
 import { saveSale } from '../utils/storage'
 
-export default function SaleForm({ product, employees, onSold, role, currentUser }){
+export default function SaleForm({ product, employees, onSold, role, currentUser }) {
   const [employeeId, setEmployeeId] = useState('')
   const [qty, setQty] = useState(1)
-  const [availableStock, setAvailableStock] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  const unitPrice = Number(product.sale_price || product.salePrice || 0)
-  const unitProfit = Number(product.sale_price || product.salePrice) - Number(product.cost_price || product.costPrice || 0)
-  const total = unitPrice * Number(qty)
-
-  const isCaissier = role === 'caissier' || role === 'employee'
+  const unitPrice  = Number(product.sale_price || product.salePrice || 0)
+  const unitProfit = unitPrice - Number(product.cost_price || product.costPrice || 0)
+  const total      = unitPrice * Number(qty)
+  const stock      = Number(product.stock ?? 0)
+  const isUnlimited = stock === 0
+  const isCaissier  = role === 'caissier' || role === 'employee'
 
   useEffect(() => {
     if (isCaissier && currentUser) {
       setEmployeeId(currentUser.id)
-    } else if (employees.length > 0 && !employeeId) {
+    } else if (employees.length > 0) {
       setEmployeeId(employees[0].id)
     }
-    setAvailableStock(product.stock ?? product.stock === 0 ? product.stock : null)
-  }, [product, employees, currentUser])
+    setQty(1)
+  }, [product, currentUser])
 
-  async function handleSubmit(e){
+  async function handleSubmit(e) {
     e.preventDefault()
     const q = Number(qty)
-    if(availableStock !== null && q > availableStock){
-      alert('Quantité supérieure au stock disponible')
+
+    // Vérification stock côté frontend
+    if (!isUnlimited && q > stock) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Stock insuffisant',
+        text: `Stock disponible : ${stock} unité(s)`,
+        background: '#142034',
+        color: '#d7e2ff',
+      })
       return
     }
-    const sale = {
-      product_id: product.id,
-      employee_id: employeeId || null,
-      qty: q
-    }
-    try{
-      await saveSale(sale)
+
+    setLoading(true)
+    try {
+      await saveSale({
+        product_id:  product.id,
+        employee_id: employeeId || null,
+        qty:         q
+      })
       Swal.fire({
         icon: 'success',
-        title: 'Vente réussie',
-        text: 'La vente a bien été enregistrée.',
-        timer: 1500,
-        showConfirmButton: false
+        title: 'Vente réussie !',
+        text: `${product.name} × ${q} — ${total.toLocaleString()} FCFA`,
+        timer: 1800,
+        showConfirmButton: false,
+        background: '#142034',
+        color: '#d7e2ff',
       })
       onSold && onSold()
-    }catch(err){
-      console.error(err)
-      alert('Erreur lors de l\'enregistrement de la vente')
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: err.message || 'Erreur lors de la vente',
+        background: '#142034',
+        color: '#d7e2ff',
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* En-tête du produit */}
+      {/* En-tête produit */}
       <div className="flex items-center gap-3 pb-4 border-b border-outline-variant/10">
         <div className="w-12 h-12 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center">
           <span className="material-symbols-outlined">inventory_2</span>
         </div>
         <div>
-          <h3 className="font-headline font-bold text-on-background text-lg">
-            {product.name}
-          </h3>
+          <h3 className="font-headline font-bold text-on-background text-lg">{product.name}</h3>
           <p className="text-xs text-on-primary-container">
-            {availableStock !== null ? `${availableStock} en stock` : 'Stock illimité'}
+            {isUnlimited ? 'Stock illimité' : `${stock} en stock`}
           </p>
         </div>
       </div>
@@ -76,10 +93,10 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
             </label>
             <select
               value={employeeId}
-              onChange={e=>setEmployeeId(e.target.value)}
+              onChange={e => setEmployeeId(e.target.value)}
               className="input-field"
             >
-              {employees.map(emp=> (
+              {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>{emp.name}</option>
               ))}
             </select>
@@ -94,20 +111,25 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
           <input
             type="number"
             value={qty}
-            onChange={e=>setQty(e.target.value)}
+            onChange={e => setQty(Math.max(1, Number(e.target.value)))}
             className="input-field"
             min={1}
-            max={availableStock || undefined}
+            max={isUnlimited ? undefined : stock}
             required
           />
-          {availableStock !== null && availableStock < 10 && (
+          {!isUnlimited && stock < 10 && stock > 0 && (
             <p className="text-xs text-error mt-1">
-              Stock bas: seulement {availableStock} restants
+              ⚠ Stock bas : seulement {stock} restant(s)
+            </p>
+          )}
+          {!isUnlimited && stock === 0 && (
+            <p className="text-xs text-error mt-1">
+              ✗ Produit épuisé
             </p>
           )}
         </div>
 
-        {/* Résumé de la commande */}
+        {/* Résumé */}
         <div className="p-4 bg-surface-container-high rounded-xl space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-on-surface-variant">Prix unitaire</span>
@@ -131,13 +153,17 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
           )}
         </div>
 
-        {/* Bouton de validation */}
         <button
           type="submit"
-          className="w-full btn-primary flex items-center justify-center gap-2"
+          disabled={loading || (!isUnlimited && stock === 0)}
+          className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="material-symbols-outlined">check_circle</span>
-          Confirmer la vente
+          {loading ? (
+            <span className="material-symbols-outlined animate-spin">refresh</span>
+          ) : (
+            <span className="material-symbols-outlined">check_circle</span>
+          )}
+          {loading ? 'Enregistrement...' : 'Confirmer la vente'}
         </button>
       </form>
     </div>

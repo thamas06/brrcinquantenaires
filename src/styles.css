@@ -56,6 +56,49 @@
     background-color: #071327;
     color: #d7e2ff;
     min-height: 100dvh;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  /* ── DARK MODE (défaut) ──────────────────────────────────── */
+  html.dark body, body {
+    background-color: #071327;
+    color: #d7e2ff;
+  }
+
+  /* ── LIGHT MODE ─────────────────────────────────────────── */
+  html.light {
+    --color-primary: #3b5a7a;
+    --color-primary-fixed-dim: #3b5a7a;
+    --color-on-primary: #ffffff;
+    --color-on-primary-container: #4a6080;
+    --color-primary-container: #dbeafe;
+    --color-secondary: #b8860b;
+    --color-secondary-fixed-dim: #a07808;
+    --color-on-secondary: #ffffff;
+    --color-tertiary: #0d7a5a;
+    --color-on-tertiary: #ffffff;
+    --color-error: #c0392b;
+    --color-on-error: #ffffff;
+    --color-surface: #f0f4f8;
+    --color-surface-dim: #e2e8f0;
+    --color-surface-bright: #ffffff;
+    --color-surface-tint: #3b5a7a;
+    --color-on-surface: #1a2332;
+    --color-on-surface-variant: #4a5568;
+    --color-on-background: #1a2332;
+    --color-background: #f0f4f8;
+    --color-surface-container-lowest: #ffffff;
+    --color-surface-container-low: #e8edf3;
+    --color-surface-container: #dde4ed;
+    --color-surface-container-high: #d0d9e6;
+    --color-surface-container-highest: #c3cedd;
+    --color-outline: #7a8fa6;
+    --color-outline-variant: #b0bec5;
+  }
+
+  html.light body {
+    background-color: #f0f4f8;
+    color: #1a2332;
   }
 
   .material-symbols-outlined {

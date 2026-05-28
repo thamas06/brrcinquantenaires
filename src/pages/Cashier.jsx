@@ -17,12 +17,17 @@ export default function Cashier({ currentUser, onLogout, role }) {
       setSales(await getSales())
     }
     load()
+    const interval = setInterval(async () => {
+      setSales(await getSales())
+      setProducts(await getProducts())
+    }, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   async function refresh() { setProducts(await getProducts()) }
   async function refreshSales() { setSales(await getSales()) }
 
-  function exportSalesAll() {
+  function exportMySales() {
     try {
       if (sales.length === 0) {
         alert('Aucune vente à exporter')
@@ -38,18 +43,20 @@ export default function Cashier({ currentUser, onLogout, role }) {
           Quantite: Number(s.qty || s.quantity || 0),
           'Prix unitaire': Number(s.unit_price || 0),
           'Total vente': Number(s.total_sale || s.totalSale || 0),
-          Employe: s.employeeName || 'N/A',
+          Employe: s.employeeName || 'Moi',
           Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
         }
       })
-      exportProductSalesToExcel('ventes_export.xlsx', rows)
+      exportProductSalesToExcel('mes_ventes.xlsx', rows)
     } catch (e) {
       console.error(e)
     }
   }
 
-  const totalSales = sales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-  const totalQty = sales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+  // Stats personnelles du caissier (ventes filtrées côté backend)
+  const mySales = sales.filter(s => String(s.employee_id) === String(currentUser?.id) || String(s.employeeId) === String(currentUser?.id))
+  const totalSales = mySales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
+  const totalQty = mySales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
 
   return (
     <div className="space-y-8">
@@ -63,8 +70,8 @@ export default function Cashier({ currentUser, onLogout, role }) {
             Interface de caisse — {currentUser?.name || 'Caissier'}
           </p>
         </div>
-        <button onClick={exportSalesAll} className="btn-secondary">
-          Exporter ventes
+        <button onClick={exportMySales} className="btn-secondary">
+          Exporter mes ventes
         </button>
       </div>
 
@@ -95,7 +102,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
             </span>
           </div>
           <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">Transactions</p>
-          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{sales.length}</h3>
+          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{mySales.length}</h3>
         </div>
       </div>
 
@@ -103,9 +110,9 @@ export default function Cashier({ currentUser, onLogout, role }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="card">
-            <h3 className="text-xl font-bold font-headline mb-6">Produits disponibles</h3>
+            <h3 className="text-xl font-bold font-headline mb-6">Mes produits assignés</h3>
             <ProductList
-              products={products}
+              products={products.filter(p => p.declared_for_user_id === currentUser?.id || p.employeeId === currentUser?.id)}
               onSelect={setSelected}
               role={role}
               employees={employees}
@@ -139,15 +146,16 @@ export default function Cashier({ currentUser, onLogout, role }) {
       {/* Ventes récentes */}
       <div className="card">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold font-headline">Ventes récentes</h3>
-          <span className="badge badge-positive">{sales.length} transactions</span>
+          <h3 className="text-xl font-bold font-headline">Mes ventes récentes</h3>
+          <span className="badge badge-positive">{mySales.length} transactions</span>
         </div>
-        {sales.length === 0 ? (
+        {mySales.length === 0 ? (
           <p className="text-on-primary-container text-center py-8">Aucune vente enregistrée</p>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {sales.slice().reverse().slice(0, 15).map(s => {
+            {mySales.slice().reverse().slice(0, 15).map(s => {
               const prod = products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))
+              const name = s.productName || prod?.name || 'Produit inconnu'
               return (
                 <div key={s.id} className="flex justify-between items-center p-4 bg-surface-container-high rounded-xl">
                   <div className="flex items-center gap-4">
@@ -156,10 +164,10 @@ export default function Cashier({ currentUser, onLogout, role }) {
                     </div>
                     <div>
                       <p className="font-headline font-semibold text-on-background">
-                        {prod?.name || 'Produit inconnu'}
+                        {name}
                       </p>
                       <p className="text-xs text-on-primary-container">
-                        Qté: {s.qty || s.quantity} • {s.employeeName || 'N/A'}
+                        Qté: {s.qty || s.quantity} • {s.employeeName || 'Moi'}
                       </p>
                     </div>
                   </div>
@@ -173,39 +181,16 @@ export default function Cashier({ currentUser, onLogout, role }) {
         )}
       </div>
 
-      {/* Résumé par employé et par produit */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="card">
-          <h3 className="text-xl font-bold font-headline mb-6">Totaux par employé</h3>
-          {employees.map(emp => {
-            const empSales = sales.filter(s => String(s.employee_id) === String(emp.id) || String(s.employeeId) === String(emp.id))
-            const qty = empSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
-            const amt = empSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-            return (
-              <div key={emp.id} className="p-4 bg-surface-container-high rounded-xl mb-3 last:mb-0">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-headline font-bold text-on-background">{emp.name}</p>
-                    <p className="text-xs text-on-primary-container capitalize">{emp.role}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-tertiary font-bold">{qty} articles</p>
-                    <p className="text-xs text-on-primary-container">{amt.toFixed(0)} FCFA</p>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="card">
-          <h3 className="text-xl font-bold font-headline mb-6">Totaux par produit</h3>
-          {products.map(p => {
+      {/* Totaux par produit (uniquement mes produits) */}
+      <div className="card">
+        <h3 className="text-xl font-bold font-headline mb-6">Totaux par produit (mes produits)</h3>
+        <div className="space-y-3">
+          {products.filter(p => p.declared_for_user_id === currentUser?.id || p.employeeId === currentUser?.id).map(p => {
             const pSales = sales.filter(s => String(s.product_id) === String(p.id) || String(s.productId) === String(p.id))
             const qty = pSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
             const amt = pSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
             return (
-              <div key={p.id} className="p-4 bg-surface-container-high rounded-xl mb-3 last:mb-0">
+              <div key={p.id} className="p-4 bg-surface-container-high rounded-xl">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-headline font-bold text-on-background">{p.name}</p>
