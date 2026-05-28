@@ -36,19 +36,31 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
   }
 
   async function downloadEmployeeReport(empId) {
-    const rows = []
-    const prodForEmp = products.filter(p => p.declared_for_user_id === empId || p.employeeId === empId)
-    prodForEmp.forEach(p => {
-      const salesForP = sales.filter(s => s.product_id === p.id || s.productId === p.id)
-      salesForP.forEach(s => rows.push({
-        product: p.name,
-        qty: s.qty || s.quantity || 0,
-        totalSale: s.total_sale || s.totalSale || 0,
-        totalProfit: role === 'admin' ? s.total_profit || s.totalProfit || 0 : null,
-        employee: s.employeeName || 'N/A'
-      }))
+    // Ventes directement liées à l'employé
+    const empSales = sales.filter(s =>
+      String(s.employee_id) === String(empId) ||
+      String(s.employeeId) === String(empId)
+    )
+    const rows = empSales.map(s => {
+      const prod = products.find(p =>
+        String(p.id) === String(s.product_id) ||
+        String(p.id) === String(s.productId)
+      )
+      return {
+        Produit: prod?.name || 'Inconnu',
+        Quantite: Number(s.qty || s.quantity || 0),
+        'Prix unitaire': Number(s.unit_price || 0),
+        'Total vente': Number(s.total_sale || s.totalSale || 0),
+        'Benefice': role === 'admin' ? Number(s.total_profit || s.totalProfit || 0) : undefined,
+        Employe: s.employeeName || empId,
+        Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+      }
     })
-    exportProductSalesToExcel(`${empId}_report_local.xlsx`, rows)
+    if (rows.length === 0) {
+      alert('Aucune vente trouvée pour cet employé')
+      return
+    }
+    exportProductSalesToExcel(`rapport_${empId}.xlsx`, rows)
   }
 
   const totalSales = sales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
@@ -73,7 +85,7 @@ export default function Admin({ role, employees, currentUser, onLogout }) {
       </div>
 
       {/* STATISTIQUES PRINCIPALES */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         <div className="metric-card">
           <div className="flex justify-between items-start mb-4">
             <span className="p-2 bg-secondary/10 text-secondary rounded-lg">

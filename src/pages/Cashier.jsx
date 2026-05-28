@@ -24,12 +24,24 @@ export default function Cashier({ currentUser, onLogout, role }) {
 
   function exportSalesAll() {
     try {
-      const rows = sales.map(s => ({
-        productId: s.productId || s.product_id,
-        qty: s.qty || s.quantity || 0,
-        totalSale: s.total_sale || s.totalSale || 0,
-        employee: s.employeeName || s.employeeId || s.employee_id
-      }))
+      if (sales.length === 0) {
+        alert('Aucune vente à exporter')
+        return
+      }
+      const rows = sales.map(s => {
+        const prod = products.find(p =>
+          String(p.id) === String(s.product_id) ||
+          String(p.id) === String(s.productId)
+        )
+        return {
+          Produit: prod?.name || 'Inconnu',
+          Quantite: Number(s.qty || s.quantity || 0),
+          'Prix unitaire': Number(s.unit_price || 0),
+          'Total vente': Number(s.total_sale || s.totalSale || 0),
+          Employe: s.employeeName || 'N/A',
+          Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+        }
+      })
       exportProductSalesToExcel('ventes_export.xlsx', rows)
     } catch (e) {
       console.error(e)
@@ -57,7 +69,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
       </div>
 
       {/* Stats rapides */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         <div className="metric-card">
           <div className="flex justify-between items-start mb-4">
             <span className="p-2 bg-secondary/10 text-secondary rounded-lg">

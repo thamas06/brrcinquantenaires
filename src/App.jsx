@@ -165,33 +165,30 @@ export default function App() {
       {/* Main Content */}
       <main className={`${isAuthed && !isAuthPage ? 'md:ml-72' : ''} min-h-screen flex flex-col`}>
 
-        {/* Top App Bar (masqué sur pages auth) */}
+        {/* Top App Bar */}
         {isAuthed && !isAuthPage && (
-          <header className="sticky top-0 z-40 w-full h-20 px-8 flex justify-between items-center bg-surface/90 backdrop-blur-md border-b border-outline-variant/10">
-            <div className="flex items-center gap-4">
+          <header className="mobile-header">
+            <div className="flex items-center gap-3">
               <button className="md:hidden text-primary">
                 <span className="material-symbols-outlined">menu</span>
               </button>
-              <h1 className="text-2xl font-extrabold text-secondary font-headline italic">
-                Bar Restaurant Le Cinquantenaires
+              <h1 className="text-lg md:text-2xl font-extrabold text-secondary font-headline italic truncate">
+                Bar Le Cinquantenaire
               </h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={() => setTheme(isLightMode ? 'dark' : 'light')}
-                className="w-10 h-10 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full transition-colors"
-                title={isLightMode ? 'Passer en mode sombre' : 'Passer en mode clair'}
+                className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full transition-colors"
               >
-                <span className="material-symbols-outlined">{isLightMode ? 'dark_mode' : 'light_mode'}</span>
+                <span className="material-symbols-outlined text-[20px] md:text-[24px]">{isLightMode ? 'dark_mode' : 'light_mode'}</span>
               </button>
-              <button
-                className="w-10 h-10 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full transition-colors"
-              >
-                <span className="material-symbols-outlined">notifications</span>
+              <button className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full transition-colors">
+                <span className="material-symbols-outlined text-[20px] md:text-[24px]">notifications</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-surface-container-high text-primary font-headline font-bold rounded-xl hover:bg-surface-container-highest transition-colors text-sm"
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container-high text-primary font-headline font-bold rounded-xl hover:bg-surface-container-highest transition-colors text-sm"
               >
                 <span className="material-symbols-outlined text-sm">logout</span>
                 Déconnexion
@@ -201,7 +198,7 @@ export default function App() {
         )}
 
         {/* Page Content */}
-        <section className={`flex-grow ${isAuthed && !isAuthPage ? 'p-8 max-w-7xl mx-auto w-full' : ''}`}>
+        <section className={`flex-grow ${isAuthed && !isAuthPage ? 'page-section pb-24' : ''}`}>
           <Routes>
             <Route path="/login"    element={<Login onLogin={handleLogin} />} />
             <Route path="/register" element={<Register onRegister={handleRegister} />} />
@@ -239,27 +236,23 @@ export default function App() {
 
       {/* Bottom Navigation - Mobile */}
       {isAuthed && !isAuthPage && (
-        <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-surface/95 backdrop-blur-2xl rounded-t-[2rem] shadow-floating">
+        <nav className="bottom-nav">
           {menuItems.map(item => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200 ${
-                isActive(item.path)
-                  ? 'bg-gradient-to-br from-secondary to-secondary-fixed-dim text-on-secondary shadow-lg'
-                  : 'text-primary/60 hover:text-primary hover:translate-y-[-2px]'
-              }`}
+              className={`bottom-nav-item ${isActive(item.path) ? 'bottom-nav-item-active' : ''}`}
             >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              <span className="font-label text-[10px] font-semibold uppercase tracking-wider mt-1">{item.label}</span>
+              <span className="material-symbols-outlined text-[22px]" style={isActive(item.path) ? {fontVariationSettings: "'FILL' 1"} : {}}>{item.icon}</span>
+              <span className="font-label text-[9px] font-semibold uppercase tracking-wider mt-0.5">{item.label}</span>
             </Link>
           ))}
           <button
             onClick={handleLogout}
-            className="flex flex-col items-center justify-center text-primary/60 hover:text-primary hover:translate-y-[-2px] transition-transform"
+            className="bottom-nav-item"
           >
-            <span className="material-symbols-outlined">logout</span>
-            <span className="font-label text-[10px] font-semibold uppercase tracking-wider mt-1">Sortir</span>
+            <span className="material-symbols-outlined text-[22px]">logout</span>
+            <span className="font-label text-[9px] font-semibold uppercase tracking-wider mt-0.5">Sortir</span>
           </button>
         </nav>
       )}

@@ -51,23 +51,29 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
   }
 
   async function downloadEmployeeReport(empId) {
-    try {
-      const prodForEmp = products.filter(p => p.declared_for_user_id === empId || p.employeeId === empId)
-      const rows = []
-      prodForEmp.forEach(p => {
-        const salesForP = sales.filter(s => s.product_id === p.id || s.productId === p.id)
-        salesForP.forEach(s => rows.push({
-          product: p.name,
-          qty: s.qty || s.quantity || 0,
-          totalSale: s.total_sale || s.totalSale || 0,
-          totalProfit: null,
-          employee: s.employeeName || empId
-        }))
-      })
-      exportProductSalesToExcel(`${empId}_report.xlsx`, rows)
-    } catch (err) {
-      console.error(err)
+    const empSales = sales.filter(s =>
+      String(s.employee_id) === String(empId) ||
+      String(s.employeeId) === String(empId)
+    )
+    const rows = empSales.map(s => {
+      const prod = products.find(p =>
+        String(p.id) === String(s.product_id) ||
+        String(p.id) === String(s.productId)
+      )
+      return {
+        Produit: prod?.name || 'Inconnu',
+        Quantite: Number(s.qty || s.quantity || 0),
+        'Prix unitaire': Number(s.unit_price || 0),
+        'Total vente': Number(s.total_sale || s.totalSale || 0),
+        Employe: s.employeeName || empId,
+        Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+      }
+    })
+    if (rows.length === 0) {
+      alert('Aucune vente trouvée pour cet employé')
+      return
     }
+    exportProductSalesToExcel(`rapport_${empId}.xlsx`, rows)
   }
 
   // Rôles attribuables selon le rôle de l'acteur
