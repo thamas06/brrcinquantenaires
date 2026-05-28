@@ -105,11 +105,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-surface text-on-background">
+    <div className="min-h-screen bg-surface text-on-background md:flex">
 
-      {/* Navigation Drawer - Desktop (masqué sur pages auth) */}
+      {/* Navigation Drawer - Desktop static */}
       {isAuthed && !isAuthPage && (
-        <aside className="nav-drawer">
+        <aside className="nav-drawer sticky top-0 self-start">
           <div className="flex flex-col px-4 mb-8">
             <span className="text-xl font-bold tracking-tight text-secondary font-headline italic mb-6">
               Bar Restaurant Le Cinquantenaires
@@ -163,7 +163,7 @@ export default function App() {
       )}
 
       {/* Main Content */}
-      <main className={`${isAuthed && !isAuthPage ? 'md:ml-72' : ''} min-h-screen flex flex-col`}>
+      <main className={`${isAuthed && !isAuthPage ? 'flex-1 min-w-0' : ''} min-h-screen flex flex-col`}>
 
         {/* Top App Bar */}
         {isAuthed && !isAuthPage && (

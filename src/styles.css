@@ -108,7 +108,7 @@
 
   /* ── NAV DRAWER desktop ──────────────────────────────────── */
   .nav-drawer {
-    @apply fixed left-0 top-0 h-screen w-72 bg-surface-container/80 backdrop-blur-xl rounded-r-3xl shadow-floating flex-col p-4 z-50 hidden md:flex;
+    @apply left-0 top-0 h-screen w-72 bg-surface-container/80 backdrop-blur-xl rounded-r-3xl shadow-floating flex-col p-4 z-50 hidden md:flex;
   }
 
   .nav-item {
