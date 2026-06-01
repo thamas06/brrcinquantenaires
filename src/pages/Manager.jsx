@@ -66,6 +66,7 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
         'Prix unitaire': Number(s.unit_price || 0),
         'Total vente': Number(s.total_sale || s.totalSale || 0),
         Employe: s.employeeName || empId,
+        'Caissier': s.createdByName || 'N/A',
         Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
       }
     })
@@ -74,6 +75,65 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
       return
     }
     exportProductSalesToExcel(`rapport_${empId}.xlsx`, rows)
+  }
+
+  function exportAllSales() {
+    const rows = sales.map(s => {
+      const prod = products.find(p =>
+        String(p.id) === String(s.product_id) ||
+        String(p.id) === String(s.productId)
+      )
+      return {
+        Produit: prod?.name || 'Inconnu',
+        Quantite: Number(s.qty || s.quantity || 0),
+        'Prix unitaire': Number(s.unit_price || 0),
+        'Total vente': Number(s.total_sale || s.totalSale || 0),
+        Employe: s.employeeName || 'N/A',
+        'Caissier': s.createdByName || 'N/A',
+        Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+      }
+    })
+    if (rows.length === 0) {
+      alert('Aucune vente à exporter')
+      return
+    }
+    exportProductSalesToExcel('historique_ventes_12m.xlsx', rows)
+  }
+
+  const dailyProductSummary = Object.values(sales.reduce((acc, s) => {
+    const date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : 'N/A'
+    const productId = String(s.product_id || s.productId || 'unknown')
+    const prod = products.find(p => String(p.id) === productId)
+    const name = s.productName || prod?.name || 'Produit inconnu'
+    const key = `${date}_${productId}`
+
+    if (!acc[key]) {
+      acc[key] = {
+        date,
+        productId,
+        productName: name,
+        qty: 0,
+        total: 0,
+      }
+    }
+
+    acc[key].qty += Number(s.qty || s.quantity || 0)
+    acc[key].total += Number(s.total_sale || s.totalSale || 0)
+    return acc
+  }, {}))
+
+  function exportDailyProductSummary() {
+    const rows = dailyProductSummary.map(item => ({
+      Date: item.date,
+      Produit: item.productName,
+      Quantite: item.qty,
+      'Total vente': item.total,
+    }))
+    if (rows.length === 0) {
+      alert('Aucune vente à exporter')
+      return
+    }
+    exportProductSalesToExcel('historique_journalier_par_produit.xlsx', rows)
   }
 
   // Rôles attribuables selon le rôle de l'acteur
@@ -240,6 +300,72 @@ export default function Manager({ role, employees, currentUser, onLogout }) {
             })}
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold font-headline">Historique journalier par produit</h3>
+          <button onClick={exportDailyProductSummary} className="btn-secondary">
+            Exporter journalier
+          </button>
+        </div>
+        {dailyProductSummary.length === 0 ? (
+          <p className="text-on-primary-container text-center py-8">Aucune vente enregistrée</p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {dailyProductSummary.map(item => (
+              <div key={`${item.date}_${item.productId}`} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center p-4 bg-surface-container-high rounded-xl text-sm">
+                <div>
+                  <p className="font-semibold text-on-background">{item.productName}</p>
+                  <p className="text-xs text-on-primary-container">Produit</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-on-background">{item.date}</p>
+                  <p className="text-xs text-on-primary-container">Date</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-on-background">{item.qty}</p>
+                  <p className="text-xs text-on-primary-container">Quantité vendue</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-secondary">{item.total.toFixed(0)} FCFA</p>
+                  <p className="text-xs text-on-primary-container">Total journalier</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold font-headline">Historique des ventes de caisse (12 derniers mois)</h3>
+          <button onClick={exportAllSales} className="btn-secondary">
+            Exporter tout
+          </button>
+        </div>
+        {sales.length === 0 ? (
+          <p className="text-on-primary-container text-center py-8">Aucune vente enregistrée</p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {sales.slice().reverse().map(s => {
+              const prod = products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))
+              return (
+                <div key={s.id} className="p-4 bg-surface-container-high rounded-xl">
+                  <div className="flex justify-between items-center gap-4">
+                    <div>
+                      <p className="font-headline font-semibold text-on-background">{prod?.name || s.productName || 'Produit inconnu'}</p>
+                      <p className="text-xs text-on-primary-container">
+                        Qté: {s.qty || s.quantity || 0} • Pour: {s.employeeName || 'N/A'} • Par: {s.createdByName || 'N/A'} • {s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''}
+                      </p>
+                    </div>
+                    <p className="text-secondary font-bold">{Number(s.total_sale || s.totalSale || 0).toFixed(0)} FCFA</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

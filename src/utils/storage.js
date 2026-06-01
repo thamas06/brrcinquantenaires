@@ -114,6 +114,7 @@ function normalizeSale(s){
     ...s,
     product_id,
     employee_id,
+    created_by: s.created_by ?? s.createdBy ?? null,
     productId:    product_id,
     employeeId:   employee_id,
     qty,
@@ -121,6 +122,7 @@ function normalizeSale(s){
     total_sale,
     total_profit,
     employeeName: s.employeeName ?? s.employee?.name ?? 'N/A',
+    createdByName: s.createdByName ?? s.createdBy?.name ?? null,
     productName:  s.productName  ?? s.product?.name  ?? null,
   }
 }
@@ -147,6 +149,7 @@ export async function saveSale(s){
   s.total_sale   = unitPrice  * (s.qty || 0)
   s.total_profit = unitProfit * (s.qty || 0)
   s.id           = 's_' + Date.now()
+  s.created_by   = s.created_by ?? null
   const list = JSON.parse(localStorage.getItem(P_SALES) || '[]')
   list.push(s)
   localStorage.setItem(P_SALES, JSON.stringify(list))

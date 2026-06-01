@@ -4,7 +4,7 @@ import { saveSale } from '../utils/storage'
 
 export default function SaleForm({ product, employees, onSold, role, currentUser }) {
   const [employeeId, setEmployeeId] = useState('')
-  const [qty, setQty] = useState(1)
+  const [qty, setQty] = useState('')
   const [loading, setLoading] = useState(false)
 
   const unitPrice  = Number(product.sale_price || product.salePrice || 0)
@@ -15,13 +15,13 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
   const isCaissier  = role === 'caissier' || role === 'employee'
 
   useEffect(() => {
-    if (isCaissier && currentUser) {
+    if (currentUser) {
       setEmployeeId(currentUser.id)
     } else if (employees.length > 0) {
       setEmployeeId(employees[0].id)
     }
-    setQty(1)
-  }, [product, currentUser])
+    setQty('')
+  }, [product.id, currentUser?.id])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -41,9 +41,16 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
 
     setLoading(true)
     try {
+      if (!qty || q < 1) {
+        throw new Error('La quantité doit être au moins 1')
+      }
+      if (!employeeId) {
+        throw new Error('Veuillez sélectionner un employé')
+      }
       await saveSale({
         product_id:  product.id,
-        employee_id: employeeId || null,
+        employee_id: employeeId,
+        created_by:  currentUser?.id,
         qty:         q
       })
       Swal.fire({
@@ -86,22 +93,21 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Employé - caché pour caissier */}
-        {!isCaissier && (
-          <div>
-            <label className="block text-sm font-semibold text-on-surface-variant mb-2">
-              Vendu par
-            </label>
-            <select
-              value={employeeId}
-              onChange={e => setEmployeeId(e.target.value)}
-              className="input-field"
-            >
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div>
+          <label className="block text-sm font-semibold text-on-surface-variant mb-2">
+            Attribué à l'employé
+          </label>
+          <select
+            value={employeeId}
+            onChange={e => setEmployeeId(e.target.value)}
+            className="input-field"
+          >
+            <option value="">Sélectionner un employé</option>
+            {employees.map(emp => (
+              <option key={emp.id} value={emp.id}>{emp.name}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Quantité */}
         <div>
@@ -111,10 +117,11 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
           <input
             type="number"
             value={qty}
-            onChange={e => setQty(Math.max(1, Number(e.target.value)))}
+            onChange={e => setQty(e.target.value)}
             className="input-field"
-            min={1}
+            min={0}
             max={isUnlimited ? undefined : stock}
+            placeholder="0"
             required
           />
           {!isUnlimited && stock < 10 && stock > 0 && (
