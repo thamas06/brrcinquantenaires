@@ -10,7 +10,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
   const [selected, setSelected] = useState(null)
   const [sales, setSales] = useState([])
   const [selectedEmp, setSelectedEmp] = useState(null)
-  const saleEmployees = employees.filter(e => ['caissier', 'employee'].includes(e.role))
+  const saleEmployees = employees.filter(e => ['employee', 'caissier'].includes(e.role))
 
   useEffect(() => {
     async function load() {
@@ -34,15 +34,15 @@ export default function Cashier({ currentUser, onLogout, role }) {
   async function refreshSales() { setSales(await getSales()) }
 
   // Stats personnelles du caissier (ventes filtrées côté backend)
-  const mySales = sales.filter(s =>
-    String(s.created_by) === String(currentUser?.id) ||
-    String(s.employee_id) === String(currentUser?.id) ||
-    String(s.employeeId) === String(currentUser?.id)
+  const employeeSales = sales.filter(s =>
+    String(s.created_by) === String(currentUser?.id) &&
+    String(s.employee_id) !== String(currentUser?.id) &&
+    employees.some(emp => String(emp.id) === String(s.employee_id) && ['employee', 'caissier'].includes(emp.role))
   )
-  const totalSales = mySales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-  const totalQty = mySales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
+  const totalSales = employeeSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
+  const totalQty = employeeSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
 
-  const dailyProductSummary = Object.values(mySales.reduce((acc, s) => {
+  const dailyProductSummary = Object.values(employeeSales.reduce((acc, s) => {
     const date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : 'N/A'
     const productId = String(s.product_id || s.productId || 'unknown')
     const prod = products.find(p => String(p.id) === productId)
@@ -126,7 +126,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
             </span>
           </div>
           <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">Transactions</p>
-          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{mySales.length}</h3>
+          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{employeeSales.length}</h3>
         </div>
       </div>
 
@@ -212,7 +212,9 @@ export default function Cashier({ currentUser, onLogout, role }) {
         </p>
         <div className="space-y-3">
           {saleEmployees.map(emp => {
-            const empSales = sales.filter(s => String(s.employee_id) === String(emp.id) || String(s.employeeId) === String(emp.id))
+            const empSales = sales.filter(
+              s => String(s.employee_id) === String(emp.id)
+            )
             const empQty = empSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
             const empAmt = empSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
             const isSelected = selectedEmp?.id === emp.id

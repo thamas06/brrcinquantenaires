@@ -15,13 +15,17 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
   const isCaissier  = role === 'caissier' || role === 'employee'
 
   useEffect(() => {
-    if (currentUser) {
+    if (role === 'caissier') {
+      if (employees.length > 0) {
+        setEmployeeId(employees[0].id)
+      }
+    } else if (currentUser) {
       setEmployeeId(currentUser.id)
     } else if (employees.length > 0) {
       setEmployeeId(employees[0].id)
     }
     setQty('')
-  }, [product.id, currentUser?.id])
+  }, [product.id, currentUser?.id, role, employees.length])
 
   async function handleSubmit(e) {
     e.preventDefault()
