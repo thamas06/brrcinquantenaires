@@ -53,37 +53,33 @@ function normalizeProduct(p){
   }
 }
 
-export async function saveProduct(p){
+function ensureAuthenticated(action) {
   const token = api.getToken()
-  if(token){
-    const res = await api.authFetch('/api/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p)
-    })
-    return await res.json()
+  if(!token) throw new Error(`Vous devez être connecté pour ${action}.`)
+  return token
+}
+
+export async function saveProduct(p){
+  ensureAuthenticated('créer ce produit')
+  const res = await api.authFetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(p)
+  })
+  if(!res.ok){
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message || 'Impossible de créer le produit')
   }
-  const list = await getProducts()
-  p.id    = 'p_' + Date.now()
-  p.stock = p.stock ?? 0
-  list.push(p)
-  localStorage.setItem(P_PRODUCTS, JSON.stringify(list))
-  return p
+  return normalizeProduct(await res.json())
 }
 
 export async function deleteProduct(productId){
-  const token = api.getToken()
-  if(token){
-    const res = await api.authFetch(`/api/products/${productId}`, { method: 'DELETE' })
-    if(!res.ok){
-      const err = await res.json().catch(() => null)
-      throw new Error(err?.message || 'Impossible de supprimer le produit')
-    }
-    return true
+  ensureAuthenticated('supprimer ce produit')
+  const res = await api.authFetch(`/api/products/${productId}`, { method: 'DELETE' })
+  if(!res.ok){
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message || 'Impossible de supprimer le produit')
   }
-  const list    = await getProducts()
-  const updated = list.filter(p => String(p.id) !== String(productId))
-  localStorage.setItem(P_PRODUCTS, JSON.stringify(updated))
   return true
 }
 
@@ -128,37 +124,17 @@ function normalizeSale(s){
 }
 
 export async function saveSale(s){
-  const token = api.getToken()
-  if(token){
-    const res = await api.authFetch('/api/sales', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(s)
-    })
-    if(!res.ok){
-      const err = await res.json().catch(() => null)
-      throw new Error(err?.message || 'Erreur lors de la vente')
-    }
-    return normalizeSale(await res.json())
+  ensureAuthenticated('enregistrer cette vente')
+  const res = await api.authFetch('/api/sales', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(s)
+  })
+  if(!res.ok){
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message || 'Erreur lors de la vente')
   }
-  const products  = await getProducts()
-  const prod      = products.find(p => String(p.id) === String(s.product_id))
-  const unitPrice = prod ? Number(prod.sale_price ?? prod.salePrice ?? 0) : 0
-  const unitProfit= prod ? (Number(prod.sale_price ?? prod.salePrice ?? 0) - Number(prod.cost_price ?? prod.costPrice ?? 0)) : 0
-  s.unit_price   = unitPrice
-  s.total_sale   = unitPrice  * (s.qty || 0)
-  s.total_profit = unitProfit * (s.qty || 0)
-  s.id           = 's_' + Date.now()
-  s.created_by   = s.created_by ?? null
-  const list = JSON.parse(localStorage.getItem(P_SALES) || '[]')
-  list.push(s)
-  localStorage.setItem(P_SALES, JSON.stringify(list))
-  if(prod){
-    prod.stock = Math.max(0, (prod.stock || 0) - (s.qty || 0))
-    const updated = products.map(p => p.id === prod.id ? prod : p)
-    localStorage.setItem(P_PRODUCTS, JSON.stringify(updated))
-  }
-  return s
+  return normalizeSale(await res.json())
 }
 
 export function clearAll(){
