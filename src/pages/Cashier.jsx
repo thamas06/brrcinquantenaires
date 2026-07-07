@@ -1,146 +1,263 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import ProductList from '../components/ProductList'
 import SaleForm from '../components/SaleForm'
 import { getProducts, getEmployees, getSales } from '../utils/storage'
 import { exportProductSalesToExcel } from '../utils/exportExcel'
+import { assignRole } from '../utils/api'
+import Swal from 'sweetalert2'
 
 export default function Cashier({ currentUser, onLogout, role }) {
-  const [products, setProducts] = useState([])
+  const [products, setProducts]   = useState([])
   const [employees, setEmployees] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [sales, setSales] = useState([])
-  const [selectedEmp, setSelectedEmp] = useState(null)
-  const saleEmployees = employees.filter(e => ['employee', 'caissier'].includes(e.role))
+  const [selected, setSelected]   = useState(null)
+  const [sales, setSales]         = useState([])
+  const [openEmpId, setOpenEmpId] = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [assignMsg, setAssignMsg] = useState('')
 
-  useEffect(() => {
-    async function load() {
-      setProducts(await getProducts())
-      setEmployees(await getEmployees())
-      setSales(await getSales())
+  const pendingUsers = employees.filter(e => e.role === 'pending')
+
+  const saleEmployees = employees.filter(e =>
+    e.role === 'employee' && String(e.id) !== String(currentUser?.id)
+  )
+
+  const loadAll = useCallback(async () => {
+    try {
+      const [prods, emps, sls] = await Promise.all([
+        getProducts(), getEmployees(), getSales()
+      ])
+      setProducts(prods)
+      setEmployees(emps)
+      setSales(sls)
+    } catch (err) {
+      console.error(err)
     }
-    load()
-    const interval = setInterval(async () => {
-      setSales(await getSales())
-      setProducts(await getProducts())
-      setEmployees(await getEmployees())
-    }, 5000)
-    return () => clearInterval(interval)
   }, [])
 
-  async function refresh() {
-    setProducts(await getProducts())
-    setEmployees(await getEmployees())
-  }
-  async function refreshSales() { setSales(await getSales()) }
+  useEffect(() => {
+    setLoading(true)
+    loadAll().finally(() => setLoading(false))
+    const interval = setInterval(loadAll, 10000)
+    return () => clearInterval(interval)
+  }, [loadAll])
 
-  // Stats personnelles du caissier (ventes filtrées côté backend)
-  const employeeSales = sales.filter(s =>
-    String(s.created_by) === String(currentUser?.id) &&
-    String(s.employee_id) !== String(currentUser?.id) &&
-    employees.some(emp => String(emp.id) === String(s.employee_id) && ['employee', 'caissier'].includes(emp.role))
-  )
-  const totalSales = employeeSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-  const totalQty = employeeSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
-
-  const dailyProductSummary = Object.values(employeeSales.reduce((acc, s) => {
-    const date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : 'N/A'
-    const productId = String(s.product_id || s.productId || 'unknown')
-    const prod = products.find(p => String(p.id) === productId)
-    const name = s.productName || prod?.name || 'Produit inconnu'
-    const key = `${date}_${productId}`
-
-    if (!acc[key]) {
-      acc[key] = {
-        date,
-        productId,
-        productName: name,
-        qty: 0,
-        total: 0,
-      }
-    }
-
-    acc[key].qty += Number(s.qty || s.quantity || 0)
-    acc[key].total += Number(s.total_sale || s.totalSale || 0)
-    return acc
-  }, {}))
-
-  function exportMySales() {
+  async function handleActivateEmployee(user) {
     try {
-      if (dailyProductSummary.length === 0) {
-        alert('Aucune vente à exporter')
-        return
-      }
-      const rows = dailyProductSummary.map(item => ({
-        Date: item.date,
-        Produit: item.productName,
-        Quantite: item.qty,
-        'Total vente': item.total,
-      }))
-      exportProductSalesToExcel('historique_journalier_par_produit.xlsx', rows)
-    } catch (e) {
-      console.error(e)
+      await assignRole(user.id, 'employee')
+      setAssignMsg(`✓ ${user.name} est maintenant activé comme employé`)
+      setTimeout(() => setAssignMsg(''), 4000)
+      await loadAll()
+    } catch (err) {
+      Swal.fire({
+        icon: 'error', title: 'Erreur',
+        text: err.message || "Impossible d'activer cet employé",
+        background: '#142034', color: '#d7e2ff',
+      })
     }
   }
+
+  // ── Calculs ────────────────────────────────────────────────────────────────
+
+  const toutesLesVentes = sales
+
+  // Ventes faites AU NOM d'un utilisateur DIFFERENT de la caissière
+  // = employee_id existe ET employee_id !== id de la caissière
+  const ventesParEmploye = toutesLesVentes.filter(s =>
+    s.employee_id &&
+    String(s.employee_id) !== String(currentUser?.id)
+  )
+
+  // Ventes propres à la caissière
+  // = pas d'employee_id OU employee_id === id de la caissière
+  const ventesPropres = toutesLesVentes.filter(s =>
+    !s.employee_id ||
+    String(s.employee_id) === String(currentUser?.id)
+  )
+
+  // TOTAL caissière = uniquement ses ventes propres
+  const totalCaissiere = ventesPropres
+    .reduce((a, s) => a + Number(s.total_sale || 0), 0)
+
+  // GRAND TOTAL = toutes les ventes
+  const grandTotal = toutesLesVentes
+    .reduce((a, s) => a + Number(s.total_sale || 0), 0)
+
+  const totalQty = toutesLesVentes
+    .reduce((a, s) => a + Number(s.qty || 0), 0)
+
+  const nbTransactions = toutesLesVentes.length
+
+  // Grouper les ventes au nom d'un utilisateur par utilisateur
+  const comptesEmployes = Object.values(
+    ventesParEmploye.reduce((acc, s) => {
+      const empId = String(s.employee_id)
+      if (!acc[empId]) {
+        const emp = employees.find(e => String(e.id) === empId)
+        acc[empId] = {
+          id:     empId,
+          name:   emp?.name || s.employeeName || `Utilisateur #${empId}`,
+          ventes: []
+        }
+      }
+      acc[empId].ventes.push(s)
+      return acc
+    }, {})
+  )
+
+  // Total de toutes les sommes dues par les utilisateurs
+  const totalEmployes = ventesParEmploye
+    .reduce((a, s) => a + Number(s.total_sale || 0), 0)
+
+  const myProducts = (role === 'admin' || role === 'manager')
+    ? products
+    : products.filter(p =>
+        String(p.declared_for_user_id) === String(currentUser?.id) ||
+        String(p.employeeId) === String(currentUser?.id)
+      )
+
+  function getEmployeeName(sale) {
+    if (!sale.employee_id) return null
+    const emp = employees.find(e => String(e.id) === String(sale.employee_id))
+    return emp?.name || sale.employeeName || `Utilisateur #${sale.employee_id}`
+  }
+
+  function exportComptes() {
+    const rows = []
+    comptesEmployes.forEach(compte => {
+      compte.ventes.forEach(s => {
+        const prod = products.find(p => String(p.id) === String(s.product_id))
+        rows.push({
+          Utilisateur: compte.name,
+          Produit:     prod?.name || s.productName || 'Inconnu',
+          Quantité:    Number(s.qty || 0),
+          'Total':     Number(s.total_sale || 0),
+          Date:        s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+        })
+      })
+    })
+    rows.push({ Utilisateur: '— TOTAL CAISSIÈRE —', Produit: '', Quantité: '', Total: totalCaissiere.toFixed(0), Date: '' })
+    rows.push({ Utilisateur: '— GRAND TOTAL —',     Produit: '', Quantité: '', Total: grandTotal.toFixed(0),    Date: '' })
+    if (rows.length === 2) { alert('Aucune vente à exporter'); return }
+    exportProductSalesToExcel(
+      `comptes_${currentUser?.name}_${new Date().toISOString().split('T')[0]}.xlsx`,
+      rows
+    )
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24">
+      <span className="material-symbols-outlined animate-spin text-secondary text-4xl">refresh</span>
+    </div>
+  )
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex justify-between items-end">
+
+      {/* ── Header ── */}
+      <div className="flex justify-between items-end flex-wrap gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-on-background font-headline">
-            Point de Vente
-          </h2>
-          <p className="text-on-primary-container mt-2">
-            Interface de caisse — {currentUser?.name || 'Caissier'}
+          <h2 className="text-3xl font-bold text-on-background font-headline">Point de Vente</h2>
+          <p className="text-on-primary-container mt-1">
+            Interface de caisse — <strong>{currentUser?.name}</strong>
           </p>
         </div>
-        <button onClick={exportMySales} className="btn-secondary">
-          Exporter mes ventes
+        <button onClick={exportComptes} className="btn-secondary">
+          <span className="material-symbols-outlined text-sm align-middle mr-1">download</span>
+          Exporter les comptes
         </button>
       </div>
 
-      {/* Stats rapides */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-        <div className="metric-card">
-          <div className="flex justify-between items-start mb-4">
-            <span className="p-2 bg-secondary/10 text-secondary rounded-lg">
-              <span className="material-symbols-outlined">payments</span>
-            </span>
+      {/* ── Notification ── */}
+      {assignMsg && (
+        <div className="p-4 bg-tertiary/10 text-tertiary rounded-xl text-sm font-semibold">
+          {assignMsg}
+        </div>
+      )}
+
+      {/* ── Comptes en attente ── */}
+      {pendingUsers.length > 0 && (
+        <div className="card border-2 border-secondary/40">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="material-symbols-outlined text-secondary">person_add</span>
+            <h3 className="text-lg font-bold font-headline">
+              Nouveaux comptes à activer
+              <span className="ml-2 text-xs bg-secondary text-on-secondary px-2 py-0.5 rounded-full font-bold">
+                {pendingUsers.length}
+              </span>
+            </h3>
           </div>
-          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">Total ventes</p>
-          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{totalSales.toFixed(0)} FCFA</h3>
+          <div className="space-y-3">
+            {pendingUsers.map(u => (
+              <div key={u.id} className="flex items-center justify-between p-3 bg-surface-container-high rounded-xl">
+                <div className="flex items-center gap-3">
+                  <img className="w-10 h-10 rounded-full"
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=e9c176&color=412d00&size=80`}
+                    alt={u.name} />
+                  <div>
+                    <p className="font-bold text-on-background text-sm">{u.name}</p>
+                    <p className="text-xs text-on-primary-container">{u.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => handleActivateEmployee(u)}
+                  className="flex items-center gap-1 px-4 py-2 bg-secondary text-on-secondary text-sm font-bold rounded-xl hover:opacity-90">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  Activer comme employé
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Stats caissière ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="metric-card">
+          <span className="p-2 bg-secondary/10 text-secondary rounded-lg inline-flex mb-4">
+            <span className="material-symbols-outlined">payments</span>
+          </span>
+          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">
+            Mon total encaissé
+          </p>
+          <h3 className="text-3xl font-bold text-secondary mt-2 font-headline">
+            {grandTotal.toFixed(0)} FCFA
+          </h3>
         </div>
         <div className="metric-card">
-          <div className="flex justify-between items-start mb-4">
-            <span className="p-2 bg-tertiary/10 text-tertiary rounded-lg">
-              <span className="material-symbols-outlined">inventory_2</span>
-            </span>
-          </div>
-          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">Articles vendus</p>
+          <span className="p-2 bg-tertiary/10 text-tertiary rounded-lg inline-flex mb-4">
+            <span className="material-symbols-outlined">inventory_2</span>
+          </span>
+          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">
+            Articles vendus
+          </p>
           <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{totalQty}</h3>
         </div>
         <div className="metric-card">
-          <div className="flex justify-between items-start mb-4">
-            <span className="p-2 bg-primary/10 text-primary rounded-lg">
-              <span className="material-symbols-outlined">receipt_long</span>
-            </span>
-          </div>
-          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">Transactions</p>
-          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{employeeSales.length}</h3>
+          <span className="p-2 bg-primary/10 text-primary rounded-lg inline-flex mb-4">
+            <span className="material-symbols-outlined">receipt_long</span>
+          </span>
+          <p className="text-on-primary-container text-sm font-semibold uppercase tracking-wider">
+            Transactions
+          </p>
+          <h3 className="text-3xl font-bold text-on-background mt-2 font-headline">{nbTransactions}</h3>
         </div>
       </div>
 
-      {/* Zone de travail principale */}
+      {/* ── Zone de vente ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="card">
-            <h3 className="text-xl font-bold font-headline mb-6">Mes produits assignés</h3>
-            <ProductList
-              products={products.filter(p => p.declared_for_user_id === currentUser?.id || p.employeeId === currentUser?.id)}
-              onSelect={setSelected}
-              role={role}
-              employees={employees}
-            />
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold font-headline">Produits à vendre</h3>
+              <span className="badge badge-positive">{myProducts.length} produits</span>
+            </div>
+            {myProducts.length === 0 ? (
+              <div className="text-center py-12 bg-surface-container-low rounded-2xl border-2 border-dashed border-outline-variant/30">
+                <span className="material-symbols-outlined text-4xl opacity-50 block mb-3">inventory_2</span>
+                <p className="text-on-primary-container font-semibold">Aucun produit assigné</p>
+              </div>
+            ) : (
+              <ProductList products={myProducts} onSelect={setSelected} role={role} employees={employees} />
+            )}
           </div>
         </div>
 
@@ -151,11 +268,7 @@ export default function Cashier({ currentUser, onLogout, role }) {
               product={selected}
               employees={saleEmployees}
               currentUser={currentUser}
-              onSold={() => {
-                setSelected(null)
-                refresh()
-                refreshSales()
-              }}
+              onSold={async () => { setSelected(null); await loadAll() }}
               role={role}
             />
           ) : (
@@ -167,179 +280,232 @@ export default function Cashier({ currentUser, onLogout, role }) {
         </div>
       </div>
 
-      {/* Historique journalier par produit */}
+      {/* ── Comptes fin de journée ── */}
       <div className="card">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold font-headline">Historique journalier par produit</h3>
-          <span className="badge badge-positive">{dailyProductSummary.length} lignes</span>
-        </div>
-        {dailyProductSummary.length === 0 ? (
-          <p className="text-on-primary-container text-center py-8">Aucune vente enregistrée</p>
-        ) : (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {dailyProductSummary.map(item => (
-              <div key={`${item.date}_${item.productId}`} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center p-4 bg-surface-container-high rounded-xl text-sm">
-                <div>
-                  <p className="font-semibold text-on-background">{item.productName}</p>
-                  <p className="text-xs text-on-primary-container">Produit</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-on-background">{item.date}</p>
-                  <p className="text-xs text-on-primary-container">Date</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-on-background">{item.qty}</p>
-                  <p className="text-xs text-on-primary-container">Quantité vendue</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-secondary">{item.total.toFixed(0)} FCFA</p>
-                  <p className="text-xs text-on-primary-container">Total journalier</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* COMPTES À REMETTRE EN FIN DE JOURNÉE */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold font-headline">Comptes à remettre (Fin de journée)</h3>
-          <span className="badge badge-positive">{saleEmployees.length} employés</span>
-        </div>
+        <h3 className="text-xl font-bold font-headline mb-2">
+          <span className="material-symbols-outlined align-middle mr-2 text-secondary">account_balance_wallet</span>
+          Comptes fin de journée
+        </h3>
         <p className="text-sm text-on-primary-container mb-6">
-          Toutes les ventes enregistrées au nom des employés. Montant total à remettre à chaque employé.
+          Montant à collecter chez chaque utilisateur, et total encaissé par {currentUser?.name}.
         </p>
+
         <div className="space-y-3">
-          {saleEmployees.map(emp => {
-            const empSales = sales.filter(
-              s => String(s.employee_id) === String(emp.id)
-            )
-            const empQty = empSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
-            const empAmt = empSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-            const isSelected = selectedEmp?.id === emp.id
-            return (
-              <div key={emp.id}>
-                <div 
-                  onClick={() => setSelectedEmp(isSelected ? null : emp)}
-                  className={`p-4 rounded-xl cursor-pointer transition-all border-2 ${
-                    isSelected 
-                      ? 'bg-secondary/20 border-secondary shadow-lg' 
-                      : 'bg-surface-container-high border-transparent hover:bg-surface-container-highest'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <img
-                        className="w-12 h-12 rounded-full object-cover"
-                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=e9c176&color=412d00&size=80`}
-                        alt={emp.name}
-                      />
-                      <div>
-                        <p className="font-headline font-bold text-on-background text-lg">{emp.name}</p>
-                        <p className="text-xs text-on-primary-container">{empQty} articles vendus</p>
+
+          {/* ══════════════════════════════════════════════════
+              BLOC PAR UTILISATEUR
+              Chaque utilisateur dont le nom a été choisi
+              lors d'une vente apparaît ici avec son total
+          ══════════════════════════════════════════════════ */}
+          {comptesEmployes.length === 0 ? (
+            <div className="text-center py-10 bg-surface-container-low rounded-2xl border-2 border-dashed border-outline-variant/30">
+              <span className="material-symbols-outlined text-4xl opacity-40 block mb-2">groups</span>
+              <p className="text-on-primary-container">Aucune vente enregistrée au nom d'un utilisateur</p>
+            </div>
+          ) : (
+            comptesEmployes.map(compte => {
+              const empTotal = compte.ventes.reduce((a, s) => a + Number(s.total_sale || 0), 0)
+              const empQty   = compte.ventes.reduce((a, s) => a + Number(s.qty || 0), 0)
+              const isOpen   = openEmpId === compte.id
+
+              return (
+                <div key={compte.id}>
+                  {/* Carte utilisateur cliquable */}
+                  <div
+                    onClick={() => setOpenEmpId(isOpen ? null : compte.id)}
+                    className={`p-4 rounded-xl cursor-pointer transition-all border-2 ${
+                      isOpen
+                        ? 'bg-primary/10 border-primary shadow-lg'
+                        : 'bg-surface-container-high border-transparent hover:bg-surface-container-highest'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <img
+                          className="w-12 h-12 rounded-full"
+                          src={`https://ui-avatars.com/api/?name=${encodeURIComponent(compte.name)}&background=2d4a6e&color=d7e2ff&size=80`}
+                          alt={compte.name}
+                        />
+                        <div>
+                          <p className="font-headline font-bold text-on-background text-lg">{compte.name}</p>
+                          <p className="text-xs text-on-primary-container">
+                            {empQty} articles • {compte.ventes.length} vente(s)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-primary">{empTotal.toFixed(0)}</p>
+                        <p className="text-xs text-on-primary-container font-semibold">FCFA à collecter</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-secondary">{empAmt.toFixed(0)}</p>
-                      <p className="text-xs text-on-primary-container font-semibold">FCFA à remettre</p>
-                    </div>
                   </div>
-                </div>
-                {isSelected && empSales.length > 0 && (
-                  <div className="mt-3 p-4 bg-surface-container rounded-xl space-y-3">
-                    <div className="flex justify-between items-center mb-3">
-                      <p className="text-sm font-semibold text-on-primary-container">Détail des ventes</p>
-                      <button
-                        onClick={() => {
-                          const rows = empSales.map(s => {
-                            const prod = products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))
-                            return {
-                              Produit: prod?.name || 'Inconnu',
-                              Quantite: Number(s.qty || s.quantity || 0),
-                              'Prix unitaire': Number(s.unit_price || 0),
-                              'Total': Number(s.total_sale || s.totalSale || 0),
-                              'Enregistrée par': s.createdByName || 'N/A',
-                              Date: s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
-                            }
-                          })
-                          const totals = [{
-                            Produit: '',
-                            Quantite: empQty,
-                            'Prix unitaire': '',
-                            'Total': empAmt.toFixed(0),
-                            'Enregistrée par': 'TOTAL',
-                            Date: ''
-                          }]
-                          exportProductSalesToExcel(`compte_${emp.name}_${new Date().toISOString().split('T')[0]}.xlsx`, [...rows, ...totals])
-                        }}
-                        className="px-3 py-1 bg-secondary text-on-secondary text-xs font-bold rounded-full hover:opacity-90 transition-opacity"
-                      >
-                        📥 Exporter PDF/Excel
-                      </button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto space-y-2">
-                      {empSales.slice().reverse().map(s => {
-                        const prod = products.find(p => String(p.id) === String(s.product_id) || String(p.id) === String(s.productId))
+
+                  {/* Détail des ventes de cet utilisateur */}
+                  {isOpen && (
+                    <div className="mt-2 ml-4 p-4 bg-surface-container rounded-xl space-y-2 border-l-4 border-primary">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-semibold text-on-primary-container">
+                          Détail — {compte.name}
+                        </p>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            const rows = compte.ventes.map(s => {
+                              const prod = products.find(p => String(p.id) === String(s.product_id))
+                              return {
+                                Utilisateur:     compte.name,
+                                Produit:         prod?.name || s.productName || 'Inconnu',
+                                Quantité:        s.qty,
+                                'Prix unitaire': s.unit_price,
+                                Total:           Number(s.total_sale || 0).toFixed(0),
+                                Date:            s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''
+                              }
+                            })
+                            rows.push({ Utilisateur: 'TOTAL', Produit: '', Quantité: empQty, 'Prix unitaire': '', Total: empTotal.toFixed(0), Date: '' })
+                            exportProductSalesToExcel(`compte_${compte.name}.xlsx`, rows)
+                          }}
+                          className="px-3 py-1 bg-secondary text-on-secondary text-xs font-bold rounded-full hover:opacity-90"
+                        >
+                          📥 Exporter
+                        </button>
+                      </div>
+
+                      {compte.ventes.slice().reverse().map(s => {
+                        const prod = products.find(p => String(p.id) === String(s.product_id))
                         return (
-                          <div key={s.id} className="p-3 bg-surface-container-high rounded-lg flex justify-between items-start text-xs">
+                          <div key={s.id} className="flex justify-between items-center p-3 bg-surface-container-high rounded-lg text-xs">
                             <div className="flex-1">
-                              <p className="font-semibold text-on-background">{prod?.name || 'Produit inconnu'}</p>
-                              <p className="text-[10px] text-on-primary-container">Enregistrée par: {s.createdByName || 'N/A'} • {s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : ''}</p>
+                              <p className="font-semibold text-on-background">
+                                {prod?.name || s.productName || 'Produit'}
+                              </p>
+                              <p className="text-[10px] text-on-primary-container">
+                                {s.created_at ? new Date(s.created_at).toLocaleString('fr-FR') : ''}
+                              </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-on-primary-container">×{s.qty || s.quantity}</p>
-                              <p className="text-secondary font-bold">{Number(s.total_sale || s.totalSale || 0).toFixed(0)} FCFA</p>
+                            <div className="text-right ml-3">
+                              <p className="text-on-primary-container">×{s.qty}</p>
+                              <p className="font-bold text-primary">{Number(s.total_sale || 0).toFixed(0)} FCFA</p>
                             </div>
                           </div>
                         )
                       })}
-                    </div>
-                    <div className="border-t border-outline-variant/30 pt-3 mt-3 flex justify-between items-center font-headline">
-                      <span className="text-on-background font-bold">TOTAL</span>
-                      <span className="text-xl text-secondary font-bold">{empAmt.toFixed(0)} FCFA</span>
-                    </div>
-                  </div>
-                )}
-                {isSelected && empSales.length === 0 && (
-                  <div className="mt-3 p-4 bg-surface-container rounded-xl text-center text-xs text-on-primary-container">
-                    Aucune vente pour cet employé
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          {saleEmployees.length === 0 && (
-            <p className="text-on-primary-container text-center py-8">Aucun employé disponible</p>
-          )}
-        </div>
-      </div>
 
-      {/* Totaux par produit (uniquement mes produits) */}
-      <div className="card">
-        <h3 className="text-xl font-bold font-headline mb-6">Totaux par produit (mes produits)</h3>
-        <div className="space-y-3">
-          {products.filter(p => p.declared_for_user_id === currentUser?.id || p.employeeId === currentUser?.id).map(p => {
-            const pSales = sales.filter(s => String(s.product_id) === String(p.id) || String(s.productId) === String(p.id))
-            const qty = pSales.reduce((a, s) => a + Number(s.qty || s.quantity || 0), 0)
-            const amt = pSales.reduce((a, s) => a + Number(s.total_sale || s.totalSale || 0), 0)
-            return (
-              <div key={p.id} className="p-4 bg-surface-container-high rounded-xl">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-headline font-bold text-on-background">{p.name}</p>
-                    <p className="text-xs text-on-primary-container">Prix: {p.sale_price || p.salePrice} FCFA</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-secondary font-bold">{qty} vendus</p>
-                    <p className="text-xs text-on-primary-container">{amt.toFixed(0)} FCFA</p>
+                      <div className="pt-2 border-t border-outline-variant/30 flex justify-between font-headline text-sm">
+                        <span className="font-bold">Total à collecter chez {compte.name}</span>
+                        <span className="font-bold text-primary">{empTotal.toFixed(0)} FCFA</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+
+          {/* ══════════════════════════════════════════════════
+              BLOC CAISSIÈRE
+              Ventes propres + récap employés + grand total
+          ══════════════════════════════════════════════════ */}
+          <div className="mt-4 p-5 bg-secondary/10 border-2 border-secondary rounded-2xl space-y-3">
+
+            {/* En-tête caissière */}
+            <div className="flex items-center gap-3">
+              <img
+                className="w-12 h-12 rounded-full border-2 border-secondary"
+                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.name || 'C')}&background=e9c176&color=412d00&size=80`}
+                alt={currentUser?.name}
+              />
+              <div>
+                <p className="font-headline font-bold text-on-background text-lg">
+                  {currentUser?.name}{' '}
+                  <span className="text-xs text-secondary font-semibold uppercase">(Caissière)</span>
+                </p>
+                <p className="text-xs text-on-primary-container">
+                  {nbTransactions} transaction(s) enregistrée(s)
+                </p>
+              </div>
+            </div>
+
+            {/* Ventes propres de la caissière */}
+            <div className="pt-3 border-t border-secondary/30">
+              <p className="text-xs font-semibold text-on-primary-container uppercase tracking-wider mb-2">
+                Ses ventes en nom propre
+              </p>
+              {ventesPropres.length === 0 ? (
+                <p className="text-xs text-on-primary-container italic">Aucune vente en nom propre</p>
+              ) : (
+                <div className="space-y-1">
+                  {ventesPropres.slice().reverse().map(s => {
+                    const prod = products.find(p => String(p.id) === String(s.product_id))
+                    return (
+                      <div key={s.id} className="flex justify-between items-center p-2 bg-surface-container rounded-lg text-xs">
+                        <div className="flex-1">
+                          <p className="font-semibold text-on-background">
+                            {prod?.name || s.productName || 'Produit'}
+                          </p>
+                          <p className="text-[10px] text-on-primary-container">
+                            {s.created_at ? new Date(s.created_at).toLocaleString('fr-FR') : ''}
+                          </p>
+                        </div>
+                        <div className="text-right ml-3">
+                          <p className="text-on-primary-container">×{s.qty}</p>
+                          <p className="font-bold text-secondary">{Number(s.total_sale || 0).toFixed(0)} FCFA</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="mt-2 flex justify-between items-center">
+                <span className="text-sm font-semibold text-on-primary-container">
+                  Sous-total ventes propres
+                </span>
+                <span className="text-xl font-bold text-on-background font-headline">
+                  {totalCaissiere.toFixed(0)} FCFA
+                </span>
+              </div>
+            </div>
+
+            {/* Récap montants à collecter par utilisateur */}
+            {comptesEmployes.length > 0 && (
+              <div className="pt-3 border-t border-secondary/30">
+                <p className="text-xs font-semibold text-on-primary-container uppercase tracking-wider mb-2">
+                  Montants à collecter chez les utilisateurs
+                </p>
+                <div className="space-y-1">
+                  {comptesEmployes.map(compte => {
+                    const empTotal = compte.ventes.reduce((a, s) => a + Number(s.total_sale || 0), 0)
+                    return (
+                      <div key={compte.id} className="flex justify-between items-center px-3 py-2 bg-surface-container rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm text-primary">person</span>
+                          <span className="text-sm font-semibold text-on-background">{compte.name}</span>
+                        </div>
+                        <span className="text-sm font-bold text-primary">{empTotal.toFixed(0)} FCFA</span>
+                      </div>
+                    )
+                  })}
+                  <div className="flex justify-between items-center px-3 py-1">
+                    <span className="text-xs text-on-primary-container font-semibold">Sous-total utilisateurs</span>
+                    <span className="text-sm font-bold text-on-background">{totalEmployes.toFixed(0)} FCFA</span>
                   </div>
                 </div>
               </div>
-            )
-          })}
+            )}
+
+            {/* Grand total */}
+            <div className="pt-3 border-t border-secondary/30 flex justify-between items-center">
+              <span className="font-headline font-bold text-on-background text-lg">
+                TOTAL GÉNÉRAL ENCAISSÉ
+              </span>
+              <span className="text-3xl font-bold text-secondary font-headline">
+                {grandTotal.toFixed(0)} FCFA
+              </span>
+            </div>
+
+          </div>
         </div>
       </div>
+
     </div>
   )
 }

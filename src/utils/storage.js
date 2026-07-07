@@ -10,12 +10,29 @@ export function initDemoData(){
   if(!localStorage.getItem(P_EMPLOYEES)) localStorage.setItem(P_EMPLOYEES, JSON.stringify([]))
 }
 
+// Vérifie si la réponse est 401 et nettoie le token si nécessaire
+function checkAuth(res) {
+  if (res.status === 401) {
+    api.setToken(null)
+    // Recharger la page pour forcer la redirection vers login
+    window.location.href = '/login'
+    throw new Error('Session expirée. Veuillez vous reconnecter.')
+  }
+  return res
+}
+
 export async function getEmployees(){
   const token = api.getToken()
   if(token){
-    const res = await api.authFetch('/api/users')
-    if(!res.ok) return []
-    return await res.json()
+    try {
+      const res = await api.authFetch('/api/users')
+      checkAuth(res)
+      if(!res.ok) return []
+      return await res.json()
+    } catch (err) {
+      if (err.message?.includes('Session expirée')) throw err
+      return []
+    }
   }
   return JSON.parse(localStorage.getItem(P_EMPLOYEES) || '[]')
 }
@@ -23,10 +40,16 @@ export async function getEmployees(){
 export async function getProducts(){
   const token = api.getToken()
   if(token){
-    const res = await api.authFetch('/api/products')
-    if(!res.ok) return []
-    const data = await res.json()
-    return data.map(normalizeProduct)
+    try {
+      const res = await api.authFetch('/api/products')
+      checkAuth(res)
+      if(!res.ok) return []
+      const data = await res.json()
+      return data.map(normalizeProduct)
+    } catch (err) {
+      if (err.message?.includes('Session expirée')) throw err
+      return []
+    }
   }
   const raw = JSON.parse(localStorage.getItem(P_PRODUCTS) || '[]')
   return raw.map(normalizeProduct)
@@ -66,6 +89,7 @@ export async function saveProduct(p){
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(p)
   })
+  checkAuth(res)
   if(!res.ok){
     const err = await res.json().catch(() => null)
     throw new Error(err?.message || 'Impossible de créer le produit')
@@ -76,6 +100,7 @@ export async function saveProduct(p){
 export async function deleteProduct(productId){
   ensureAuthenticated('supprimer ce produit')
   const res = await api.authFetch(`/api/products/${productId}`, { method: 'DELETE' })
+  checkAuth(res)
   if(!res.ok){
     const err = await res.json().catch(() => null)
     throw new Error(err?.message || 'Impossible de supprimer le produit')
@@ -86,10 +111,16 @@ export async function deleteProduct(productId){
 export async function getSales(){
   const token = api.getToken()
   if(token){
-    const res = await api.authFetch('/api/sales')
-    if(!res.ok) return []
-    const data = await res.json()
-    return data.map(normalizeSale)
+    try {
+      const res = await api.authFetch('/api/sales')
+      checkAuth(res)
+      if(!res.ok) return []
+      const data = await res.json()
+      return data.map(normalizeSale)
+    } catch (err) {
+      if (err.message?.includes('Session expirée')) throw err
+      return []
+    }
   }
   const raw       = JSON.parse(localStorage.getItem(P_SALES) || '[]')
   const employees = await getEmployees()
@@ -110,16 +141,18 @@ function normalizeSale(s){
     ...s,
     product_id,
     employee_id,
-    created_by: s.created_by ?? s.createdBy ?? null,
-    productId:    product_id,
-    employeeId:   employee_id,
+    created_by:    s.created_by    ?? s.createdBy    ?? null,
+    productId:     product_id,
+    employeeId:    employee_id,
     qty,
     unit_price,
     total_sale,
     total_profit,
-    employeeName: s.employeeName ?? s.employee?.name ?? 'N/A',
-    createdByName: s.createdByName ?? s.createdBy?.name ?? null,
-    productName:  s.productName  ?? s.product?.name  ?? null,
+    // Le backend retourne "employeeName" directement dans la réponse JSON
+    employeeName:  s.employeeName  ?? s.employee?.name  ?? 'N/A',
+    // Le backend retourne "createdByName" directement — pas "created_by_user"
+    createdByName: s.createdByName ?? s.createdBy?.name ?? s.created_by_user?.name ?? null,
+    productName:   s.productName   ?? s.product?.name   ?? null,
   }
 }
 
@@ -130,6 +163,7 @@ export async function saveSale(s){
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(s)
   })
+  checkAuth(res)
   if(!res.ok){
     const err = await res.json().catch(() => null)
     throw new Error(err?.message || 'Erreur lors de la vente')

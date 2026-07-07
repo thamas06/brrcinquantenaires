@@ -9,29 +9,30 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
 
   const unitPrice  = Number(product.sale_price || product.salePrice || 0)
   const unitProfit = unitPrice - Number(product.cost_price || product.costPrice || 0)
-  const total      = unitPrice * Number(qty)
+  const total      = unitPrice * Number(qty || 0)
   const stock      = Number(product.stock ?? 0)
   const isUnlimited = stock === 0
-  const isCaissier  = role === 'caissier' || role === 'employee'
 
+  // Quand le produit change, reset la quantité et l'employé sélectionné
+  // On ne pré-sélectionne JAMAIS automatiquement pour forcer un choix conscient
   useEffect(() => {
-    if (role === 'caissier') {
-      if (employees.length > 0) {
-        setEmployeeId(employees[0].id)
-      }
-    } else if (currentUser) {
-      setEmployeeId(currentUser.id)
-    } else if (employees.length > 0) {
-      setEmployeeId(employees[0].id)
-    }
     setQty('')
-  }, [product.id, currentUser?.id, role, employees.length])
+    setEmployeeId('')
+  }, [product.id])
+
+  // Quand la liste d'employés change, reset si l'employé sélectionné n'existe plus
+  useEffect(() => {
+    if (employeeId && !employees.find(e => String(e.id) === String(employeeId))) {
+      setEmployeeId('')
+    }
+  }, [employees.length])
+
+  const selectedEmployee = employees.find(e => String(e.id) === String(employeeId))
 
   async function handleSubmit(e) {
     e.preventDefault()
     const q = Number(qty)
 
-    // Vérification stock côté frontend
     if (!isUnlimited && q > stock) {
       Swal.fire({
         icon: 'warning',
@@ -43,14 +44,30 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
       return
     }
 
+    if (!qty || q < 1) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Quantité invalide',
+        text: 'La quantité doit être au moins 1',
+        background: '#142034',
+        color: '#d7e2ff',
+      })
+      return
+    }
+
+    if (!employeeId) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Employé requis',
+        text: 'Veuillez sélectionner un employé pour cette vente',
+        background: '#142034',
+        color: '#d7e2ff',
+      })
+      return
+    }
+
     setLoading(true)
     try {
-      if (!qty || q < 1) {
-        throw new Error('La quantité doit être au moins 1')
-      }
-      if (!employeeId) {
-        throw new Error('Veuillez sélectionner un employé')
-      }
       await saveSale({
         product_id:  product.id,
         employee_id: employeeId,
@@ -59,13 +76,18 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
       })
       Swal.fire({
         icon: 'success',
-        title: 'Vente réussie !',
-        text: `${product.name} × ${q} — ${total.toLocaleString()} FCFA`,
-        timer: 1800,
+        title: 'Vente enregistrée !',
+        html: `
+          <p><strong>${product.name}</strong> × ${q}</p>
+          <p>Pour : <strong>${selectedEmployee?.name || 'Employé'}</strong></p>
+          <p class="text-xl font-bold mt-2">${total.toLocaleString()} FCFA</p>
+        `,
+        timer: 2000,
         showConfirmButton: false,
         background: '#142034',
         color: '#d7e2ff',
       })
+      setQty('')
       onSold && onSold()
     } catch (err) {
       Swal.fire({
@@ -96,21 +118,36 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Employé - caché pour caissier */}
+
+        {/* Sélection de l'employé — toujours visible */}
         <div>
           <label className="block text-sm font-semibold text-on-surface-variant mb-2">
-            Attribué à l'employé
+            Vente au nom de l'employé <span className="text-error">*</span>
           </label>
-          <select
-            value={employeeId}
-            onChange={e => setEmployeeId(e.target.value)}
-            className="input-field"
-          >
-            <option value="">Sélectionner un employé</option>
-            {employees.map(emp => (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
-            ))}
-          </select>
+          {employees.length === 0 ? (
+            <div className="p-3 bg-error/10 text-error rounded-xl text-sm">
+              Aucun employé disponible. Contactez votre manager.
+            </div>
+          ) : (
+            <select
+              value={employeeId}
+              onChange={e => setEmployeeId(e.target.value)}
+              className="input-field"
+              required
+            >
+              <option value="">-- Sélectionner un employé --</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.role === 'caissier' ? 'Caissier' : 'Employé'})
+                </option>
+              ))}
+            </select>
+          )}
+          {selectedEmployee && (
+            <p className="text-xs text-tertiary mt-1 font-semibold">
+              ✓ Cette vente sera comptée dans le compte de {selectedEmployee.name}
+            </p>
+          )}
         </div>
 
         {/* Quantité */}
@@ -123,24 +160,20 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
             value={qty}
             onChange={e => setQty(e.target.value)}
             className="input-field"
-            min={0}
+            min={1}
             max={isUnlimited ? undefined : stock}
             placeholder="0"
             required
           />
           {!isUnlimited && stock < 10 && stock > 0 && (
-            <p className="text-xs text-error mt-1">
-              ⚠ Stock bas : seulement {stock} restant(s)
-            </p>
+            <p className="text-xs text-error mt-1">⚠ Stock bas : {stock} restant(s)</p>
           )}
           {!isUnlimited && stock === 0 && (
-            <p className="text-xs text-error mt-1">
-              ✗ Produit épuisé
-            </p>
+            <p className="text-xs text-error mt-1">✗ Produit épuisé</p>
           )}
         </div>
 
-        {/* Résumé */}
+        {/* Résumé de la vente */}
         <div className="p-4 bg-surface-container-high rounded-xl space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-on-surface-variant">Prix unitaire</span>
@@ -148,25 +181,31 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-on-surface-variant">Quantité</span>
-            <span className="font-semibold text-on-background">{qty}</span>
+            <span className="font-semibold text-on-background">{qty || 0}</span>
           </div>
+          {selectedEmployee && (
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">Compte de</span>
+              <span className="font-semibold text-tertiary">{selectedEmployee.name}</span>
+            </div>
+          )}
           <div className="border-t border-outline-variant/20 pt-3 flex justify-between">
             <span className="font-headline font-bold text-on-background">Total</span>
             <span className="font-headline font-bold text-secondary text-xl">
               {total.toLocaleString()} FCFA
             </span>
           </div>
-          {role === 'admin' && unitProfit > 0 && (
+          {(role === 'admin' || role === 'manager') && unitProfit > 0 && Number(qty) > 0 && (
             <div className="flex justify-between text-xs pt-2 border-t border-outline-variant/10">
               <span className="text-on-surface-variant">Bénéfice estimé</span>
-              <span className="text-tertiary font-bold">+{(unitProfit * qty).toLocaleString()} FCFA</span>
+              <span className="text-tertiary font-bold">+{(unitProfit * Number(qty)).toLocaleString()} FCFA</span>
             </div>
           )}
         </div>
 
         <button
           type="submit"
-          disabled={loading || (!isUnlimited && stock === 0)}
+          disabled={loading || (!isUnlimited && stock === 0) || !employeeId}
           className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
@@ -174,7 +213,7 @@ export default function SaleForm({ product, employees, onSold, role, currentUser
           ) : (
             <span className="material-symbols-outlined">check_circle</span>
           )}
-          {loading ? 'Enregistrement...' : 'Confirmer la vente'}
+          {loading ? 'Enregistrement...' : `Confirmer — ${total.toLocaleString()} FCFA`}
         </button>
       </form>
     </div>

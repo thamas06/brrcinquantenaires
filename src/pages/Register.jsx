@@ -22,8 +22,8 @@ export default function Register({ onRegister }) {
     try {
       const data = await register(name, email, password, passwordConfirm)
       onRegister && onRegister(data)
-      // Après inscription, rôle par défaut = caissier → redirection login
-      navigate('/login')
+      // Après inscription, rôle = pending → redirection vers page d'attente
+      navigate('/pending')
     } catch (err) {
       console.error(err.message)
       setError(err.message || 'Erreur lors de l\'inscription')

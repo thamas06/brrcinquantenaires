@@ -5,6 +5,7 @@ import Manager from './pages/Manager'
 import Cashier from './pages/Cashier'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Pending from './pages/Pending'
 import { initDemoData, getEmployees } from './utils/storage'
 import { getToken, setToken, authFetch } from './utils/api'
 
@@ -12,6 +13,7 @@ import { getToken, setToken, authFetch } from './utils/api'
 function ProtectedRoute({ children, allowedRoles, role }) {
   const location = useLocation()
   if (!getToken()) return <Navigate to="/login" state={{ from: location }} replace />
+  if (role === 'pending') return <Navigate to="/pending" replace />
   if (allowedRoles && !allowedRoles.includes(role)) return <Navigate to={roleHome(role)} replace />
   return children
 }
@@ -19,6 +21,7 @@ function ProtectedRoute({ children, allowedRoles, role }) {
 function roleHome(role) {
   if (role === 'admin') return '/admin'
   if (role === 'manager') return '/manager'
+  if (role === 'pending') return '/pending'
   return '/caissier'
 }
 
@@ -39,6 +42,13 @@ export default function App() {
       if (getToken()) {
         try {
           const r = await authFetch('/api/user')
+          if (r.status === 401 || r.status === 403) {
+            // Token invalide ou expiré → déconnexion silencieuse
+            setToken(null)
+            setIsAuthed(false)
+            setLoading(false)
+            return
+          }
           const u = await r.json()
           if (u && u.id) {
             setCurrentUser(u)
@@ -49,11 +59,16 @@ export default function App() {
             setIsAuthed(false)
           }
         } catch {
+          // Erreur réseau : garder le token mais marquer comme non authentifié
           setToken(null)
           setIsAuthed(false)
         }
       }
-      setEmployees(await getEmployees())
+      try {
+        setEmployees(await getEmployees())
+      } catch {
+        // ignore
+      }
       setLoading(false)
     }
     load()
@@ -89,7 +104,12 @@ export default function App() {
   }
 
   async function handleRegister(data) {
-    // Après inscription → redirection login (géré dans Register.jsx)
+    // Après inscription → rôle pending, on connecte l'utilisateur et on le redirige vers /pending
+    if (data?.user) {
+      setCurrentUser(data.user)
+      setRole(data.user.role)
+      setIsAuthed(true)
+    }
   }
 
   const menuItems = [
@@ -132,7 +152,7 @@ export default function App() {
                     {currentUser.name}
                   </span>
                   <span className="text-xs text-on-primary-container capitalize">
-                    {role === 'admin' ? 'Administrateur' : role === 'manager' ? 'Manager' : role === 'caissier' ? 'Caissier' : 'Employé'}
+                    {role === 'admin' ? 'Administrateur' : role === 'manager' ? 'Manager' : role === 'caissier' ? 'Caissier' : role === 'pending' ? 'En attente' : 'Employé'}
                   </span>
                   <div className="flex items-center gap-1 mt-1">
                     <span className="w-2 h-2 bg-tertiary rounded-full"></span>
@@ -208,6 +228,13 @@ export default function App() {
           <Routes>
             <Route path="/login"    element={<Login onLogin={handleLogin} />} />
             <Route path="/register" element={<Register onRegister={handleRegister} />} />
+
+            {/* Page en attente de validation */}
+            <Route path="/pending" element={
+              getToken()
+                ? <Pending currentUser={currentUser} onLogout={handleLogout} />
+                : <Navigate to="/login" replace />
+            } />
 
             <Route path="/admin" element={
               <ProtectedRoute allowedRoles={['admin']} role={role}>

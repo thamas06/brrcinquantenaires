@@ -63,7 +63,22 @@ export async function assignRole(userId, role){
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ role })
   })
-  if(!res.ok) throw new Error('Role assignment failed')
+  if(!res.ok){
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.message || 'Erreur lors de l\'attribution du rôle')
+  }
+  return await res.json()
+}
+
+export async function deleteUser(userId){
+  const res = await authFetch(`/api/users/${userId}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if(!res.ok){
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.message || 'Impossible de supprimer cet utilisateur')
+  }
   return await res.json()
 }
 
